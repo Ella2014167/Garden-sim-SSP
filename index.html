@@ -1109,6 +1109,11 @@ function showPlantScreen() {
   sprout.classList.remove('sprouting');
   sprout.style.opacity = '0';
   sprout.textContent   = currentPlantType.stages[0].emoji;
+  // Hide the main drop zone until the player plants
+  const drop = document.getElementById('plant-drop');
+  drop.style.transition = 'none';
+  drop.style.opacity    = '0';
+  drop.style.pointerEvents = 'none';
   ps.classList.add('visible');
 }
 
@@ -1120,6 +1125,11 @@ function plantSeed() {
   setTimeout(() => sprout.classList.add('sprouting'), 820);
   setTimeout(() => {
     document.getElementById('plant-screen').classList.remove('visible');
+    // Fade the drop zone in now that the seed has been planted
+    const drop = document.getElementById('plant-drop');
+    drop.style.transition   = 'opacity 0.6s ease';
+    drop.style.opacity      = '1';
+    drop.style.pointerEvents = '';
     renderTools();
     render();
     showEvent(currentEvent);
