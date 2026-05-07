@@ -486,7 +486,73 @@ body {
 }
 @keyframes pulseHint { 0%,100%{opacity:.4} 50%{opacity:.9} }
 
-/* ── Win animals ── */
+/* ── Winner scene (full-screen gathering animation) ── */
+#winner-scene {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 95;
+  background: linear-gradient(to bottom, #1565a8 0%, #3a8ec8 30%, #7dc4e8 60%, #b0ddf5 83%, #4a9e40 83%, #2c6620 100%);
+  overflow: hidden;
+}
+#winner-scene.visible { display: block; }
+
+#ws-plant {
+  position: absolute;
+  left: 50%; top: 44%;
+  transform: translate(-50%,-50%) scale(0);
+  font-size: 6rem;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.45));
+  z-index: 5;
+  animation: wsGrow 0.9s 0.3s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes wsGrow {
+  from { transform:translate(-50%,-50%) scale(0); opacity:0; }
+  to   { transform:translate(-50%,-50%) scale(1); opacity:1; }
+}
+
+.ws-animal {
+  position: absolute;
+  font-size: 3rem;
+  opacity: 0;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.35));
+  animation: wsGather 1.1s var(--d,0s) cubic-bezier(.34,1.3,.64,1) forwards;
+}
+@keyframes wsGather {
+  from { transform:translate(var(--sx,0),var(--sy,0)) scale(0.3) rotate(var(--rot,0deg)); opacity:0; }
+  70%  { opacity:1; }
+  to   { transform:translate(0,0) scale(1) rotate(0deg); opacity:1; }
+}
+
+/* gentle float once settled */
+.ws-animal.settled { animation: wsFloat 2.5s ease-in-out infinite; }
+@keyframes wsFloat {
+  0%,100% { transform:translateY(0); }
+  50%     { transform:translateY(-8px); }
+}
+
+#ws-msg {
+  position: absolute;
+  bottom: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  opacity: 0;
+  white-space: nowrap;
+  font-family: Georgia, serif;
+  animation: wsMsgFade 0.8s 3s ease forwards;
+}
+@keyframes wsMsgFade {
+  from { opacity:0; transform:translateX(-50%) translateY(12px); }
+  to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
+
+.confetti-piece { z-index: 96; }
+
+/* ── Win animals (overlay row) ── */
 #animal-row {
   display: flex;
   justify-content: center;
@@ -563,6 +629,13 @@ body {
 <!-- Ground -->
 <div id="ground-area">
   <div id="tool-belt"></div>
+</div>
+
+<!-- Winner scene (full-screen animal gathering) -->
+<div id="winner-scene">
+  <div id="ws-plant"></div>
+  <div id="ws-animals"></div>
+  <div id="ws-msg"></div>
 </div>
 
 <!-- Planting screen (shown before each game) -->
@@ -919,42 +992,74 @@ function getRating(hp) {
   return               { label:'Barely Made It',   stars:'⭐',         tomatoes:1 };
 }
 
+// Five ring positions + incoming directions for the gathering animation
+const ANIMAL_SLOTS = [
+  { l:'calc(50% - 165px)', t:'calc(44% - 145px)', sx:'-95vw', sy:'-45vh', rot:'-25deg', d:'0.5s'  },
+  { l:'calc(50% +  10px)', t:'calc(44% - 195px)', sx:' 10vw', sy:'-95vh', rot:' 15deg', d:'0.8s'  },
+  { l:'calc(50% + 130px)', t:'calc(44% - 140px)', sx:' 95vw', sy:'-40vh', rot:' 20deg', d:'1.1s'  },
+  { l:'calc(50% + 170px)', t:'calc(44% +  10px)', sx:' 95vw', sy:' 30vh', rot:'-15deg', d:'1.4s'  },
+  { l:'calc(50% - 165px)', t:'calc(44% +  75px)', sx:'-95vw', sy:' 45vh', rot:' 25deg', d:'1.7s'  },
+];
+
+function showWinnerScene() {
+  document.getElementById('ws-plant').textContent = currentPlantType.basketEmoji;
+  document.getElementById('ws-msg').textContent =
+    `The wildlife has gathered around your ${currentPlantType.name}! 🌿`;
+
+  const container = document.getElementById('ws-animals');
+  container.innerHTML = '';
+  currentPlantType.animals.forEach((emoji, i) => {
+    const s = ANIMAL_SLOTS[i];
+    const el = document.createElement('div');
+    el.className = 'ws-animal';
+    el.textContent = emoji;
+    el.style.cssText = `left:${s.l};top:${s.t};--sx:${s.sx};--sy:${s.sy};--rot:${s.rot};--d:${s.d}`;
+    // Add gentle float once gathered
+    const dur = 1100 + parseFloat(s.d)*1000;
+    setTimeout(() => el.classList.add('settled'), dur + 400);
+    container.appendChild(el);
+  });
+
+  document.getElementById('winner-scene').classList.add('visible');
+}
+
+function showWinStats() {
+  document.getElementById('winner-scene').classList.remove('visible');
+  const r = getRating(health);
+  document.getElementById('overlay-icon').textContent    = currentPlantType.basketEmoji;
+  document.getElementById('overlay-title').textContent   = `${currentPlantType.name} Harvest!`;
+  document.getElementById('overlay-msg').textContent     =
+    health > 70 ? `A perfect season. Your ${currentPlantType.name.toLowerCase()} is the envy of the bush!`
+    : health > 40 ? `Your ${currentPlantType.name.toLowerCase()} made it through all three seasons. Solid work.`
+    : `You barely scraped through — but that ${currentPlantType.name.toLowerCase()} is real, and it's yours!`;
+  document.getElementById('overlay-rating').textContent  = r.label;
+  document.getElementById('overlay-stars').textContent   = r.stars;
+  document.getElementById('harvest-display').textContent = currentPlantType.winEmoji.repeat(r.tomatoes);
+  document.getElementById('animal-row').innerHTML = currentPlantType.animals
+    .map((a,i) => `<span class="win-animal" style="--d:${0.3+i*0.15}s">${a}</span>`).join('');
+  document.getElementById('overlay-stats').innerHTML =
+    `Finished with <strong>${health} hp</strong> · Best streak: <strong>${bestStreak}</strong> correct in a row<br>Across 🌸 Spring · ☀️ Summer · 🍂 Autumn`;
+  document.getElementById('overlay').classList.add('visible');
+}
+
 function endGame(won) {
   gameActive = false;
-  document.getElementById('overlay').classList.add('visible');
-
   if (won) {
     spawnConfetti();
-    const r = getRating(health);
-    document.getElementById('overlay-icon').textContent    = currentPlantType.basketEmoji;
-    document.getElementById('overlay-title').textContent   = `${currentPlantType.name} Harvest!`;
-    document.getElementById('overlay-msg').textContent     =
-      health > 70
-        ? `A perfect season. Your ${currentPlantType.name.toLowerCase()} is the envy of the village!`
-        : health > 40
-        ? `Your ${currentPlantType.name.toLowerCase()} made it through all three seasons. A solid season's work.`
-        : `You barely scraped through — but that ${currentPlantType.name.toLowerCase()} is real, and it's yours!`;
-    document.getElementById('overlay-rating').textContent  = r.label;
-    document.getElementById('overlay-stars').textContent   = r.stars;
-    document.getElementById('harvest-display').textContent = currentPlantType.winEmoji.repeat(r.tomatoes);
-    // Animals gather around the plant
-    const animalRow = document.getElementById('animal-row');
-    animalRow.innerHTML = currentPlantType.animals
-      .map((a,i) => `<span class="win-animal" style="--d:${0.6+i*0.18}s">${a}</span>`)
-      .join('');
-    document.getElementById('overlay-stats').innerHTML     =
-      `Finished with <strong>${health} hp</strong> · Best streak: <strong>${bestStreak}</strong> correct in a row<br>Across 🌸 Spring · ☀️ Summer · 🍂 Autumn`;
+    showWinnerScene();
+    setTimeout(showWinStats, 4500);
   } else {
     document.getElementById('animal-row').innerHTML = '';
     document.getElementById('overlay-icon').textContent    = '🥀';
     document.getElementById('overlay-title').textContent   = 'The Plant Died';
     document.getElementById('overlay-msg').textContent     =
-      `Day ${day} of ${WIN_DAY} — the plant\'s health hit zero. Every gardener loses one. The soil has lessons to teach. Try again?`;
+      `Day ${day} of ${WIN_DAY} — health hit zero. Every gardener loses one. The soil has lessons to teach.`;
     document.getElementById('overlay-rating').textContent  = '';
     document.getElementById('overlay-stars').textContent   = '';
     document.getElementById('harvest-display').textContent = '💀';
     document.getElementById('overlay-stats').innerHTML     =
       `Made it to <strong>Day ${day}</strong> of ${WIN_DAY} · Best streak: <strong>${bestStreak}</strong>`;
+    document.getElementById('overlay').classList.add('visible');
   }
 }
 
