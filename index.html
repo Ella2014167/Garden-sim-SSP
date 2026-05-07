@@ -803,7 +803,7 @@ const EVENTS = [
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let health, day, streak, bestStreak, currentEvent, gameActive, usedIds, earnedStageIdx, plantTypeIdx, currentPlantType;
+let health, day, streak, bestStreak, correctCount, currentEvent, gameActive, usedIds, earnedStageIdx, plantTypeIdx, currentPlantType;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
@@ -880,6 +880,7 @@ function applyTool(toolId) {
     health = clamp(health + currentEvent.heal, 0, 100);
     streak++;
     bestStreak = Math.max(bestStreak, streak);
+    correctCount++;
     setFeedback('good', `✅ ${currentEvent.correctMsg}`);
     animatePlant('bounce');
     flashZone('flash-good');
@@ -1029,12 +1030,13 @@ function spawnConfetti() {
 }
 
 // ── Endings ───────────────────────────────────────────────────────────────────
-function getRating(hp) {
-  if (hp >= 80) return { label:'Master Gardener',  stars:'⭐⭐⭐⭐⭐', tomatoes:5 };
-  if (hp >= 60) return { label:'Skilled Gardener', stars:'⭐⭐⭐⭐',   tomatoes:4 };
-  if (hp >= 40) return { label:'Green Thumbed',    stars:'⭐⭐⭐',     tomatoes:3 };
-  if (hp >= 20) return { label:'Still Learning',   stars:'⭐⭐',       tomatoes:2 };
-  return               { label:'Barely Made It',   stars:'⭐',         tomatoes:1 };
+function getRating(correct) {
+  // Rated out of 21 correct answers
+  if (correct >= 19) return { label:'Master Gardener',  stars:'⭐⭐⭐⭐⭐', count:5 };
+  if (correct >= 16) return { label:'Skilled Gardener', stars:'⭐⭐⭐⭐',   count:4 };
+  if (correct >= 12) return { label:'Green Thumbed',    stars:'⭐⭐⭐',     count:3 };
+  if (correct >= 8)  return { label:'Still Learning',   stars:'⭐⭐',       count:2 };
+  return                    { label:'Barely Made It',   stars:'⭐',         count:1 };
 }
 
 // Five ring positions + incoming directions for the gathering animation
@@ -1095,20 +1097,20 @@ function showWinnerScene() {
 
 function showWinStats() {
   document.getElementById('winner-scene').classList.remove('visible');
-  const r = getRating(health);
+  const r = getRating(correctCount);
   document.getElementById('overlay-icon').textContent    = currentPlantType.basketEmoji;
   document.getElementById('overlay-title').textContent   = `${currentPlantType.name} Harvest!`;
   document.getElementById('overlay-msg').textContent     =
-    health > 70 ? `A perfect season. Your ${currentPlantType.name.toLowerCase()} is the envy of the bush!`
-    : health > 40 ? `Your ${currentPlantType.name.toLowerCase()} made it through all three seasons. Solid work.`
+    correctCount >= 19 ? `A perfect season. Your ${currentPlantType.name.toLowerCase()} is the envy of the bush!`
+    : correctCount >= 14 ? `Your ${currentPlantType.name.toLowerCase()} made it through all three seasons. Solid work.`
     : `You barely scraped through — but that ${currentPlantType.name.toLowerCase()} is real, and it's yours!`;
   document.getElementById('overlay-rating').textContent  = r.label;
   document.getElementById('overlay-stars').textContent   = r.stars;
-  document.getElementById('harvest-display').textContent = currentPlantType.winEmoji.repeat(r.tomatoes);
+  document.getElementById('harvest-display').textContent = currentPlantType.winEmoji.repeat(r.count);
   document.getElementById('animal-row').innerHTML = currentPlantType.animals
     .map((a,i) => `<span class="win-animal" style="--d:${0.3+i*0.15}s">${a}</span>`).join('');
   document.getElementById('overlay-stats').innerHTML =
-    `Finished with <strong>${health} hp</strong> · Best streak: <strong>${bestStreak}</strong> correct in a row<br>Across 🌸 Spring · ☀️ Summer · 🍂 Autumn`;
+    `Got <strong>${correctCount} / 21</strong> correct · Best streak: <strong>${bestStreak}</strong> in a row<br>Across 🌸 Spring · ☀️ Summer · 🍂 Autumn`;
   document.getElementById('overlay').classList.add('visible');
 }
 
@@ -1179,7 +1181,7 @@ function startGame() {
   plantTypeIdx = (plantTypeIdx === undefined ? -1 : plantTypeIdx);
   plantTypeIdx = (plantTypeIdx + 1) % PLANT_TYPES.length;
   currentPlantType = PLANT_TYPES[plantTypeIdx];
-  health=100; day=1; streak=0; bestStreak=0; usedIds=[]; gameActive=true; earnedStageIdx=0;
+  health=100; day=1; streak=0; bestStreak=0; correctCount=0; usedIds=[]; gameActive=true; earnedStageIdx=0;
   document.getElementById('overlay').classList.remove('visible');
   document.querySelectorAll('.confetti-piece').forEach(el=>el.remove());
   document.getElementById('plant-name').textContent = currentPlantType.name;
