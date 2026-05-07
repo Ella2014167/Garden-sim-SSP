@@ -274,6 +274,32 @@ body {
   touch-action: none;
   border: 1px solid rgba(0,0,0,0.1);
   transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s, opacity .2s;
+  position: relative;
+}
+
+/* Tooltip on hover */
+.tool-item::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15,15,15,0.9);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+  letter-spacing: 0.3px;
+}
+.tool-item:hover::after {
+  opacity: 1;
 }
 
 /* Slight resting tilts — like real items sitting on grass */
@@ -681,15 +707,15 @@ body {
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 const TOOLS = [
-  { id:'water',       cls:'tool-water',      emoji:'🪣'  },
-  { id:'pesticide',   cls:'tool-pesticide',  emoji:'🧴'  },
-  { id:'frost',       cls:'tool-frost',      emoji:'🧣'  },
-  { id:'dry',         cls:'tool-dry',        emoji:'☀️'  },
-  { id:'shade',       cls:'tool-shade',      emoji:'⛱️'  },
-  { id:'fertilizer',  cls:'tool-fertilizer', emoji:'🌿'  },
-  { id:'stake',       cls:'tool-stake',      emoji:'🎋'  },
-  { id:'tarp',        cls:'tool-tarp',       emoji:'🌂'  },
-  { id:'shears',      cls:'tool-shears',     emoji:'✂️'  },
+  { id:'water',       cls:'tool-water',      emoji:'🪣',  tip:'Water the soil'          },
+  { id:'pesticide',   cls:'tool-pesticide',  emoji:'🧴',  tip:'Spray away pests'        },
+  { id:'frost',       cls:'tool-frost',      emoji:'🧣',  tip:'Protect from frost'      },
+  { id:'dry',         cls:'tool-dry',        emoji:'☀️',  tip:'Let the soil dry out'    },
+  { id:'shade',       cls:'tool-shade',      emoji:'⛱️',  tip:'Shade from harsh sun'    },
+  { id:'fertilizer',  cls:'tool-fertilizer', emoji:'🌿',  tip:'Feed with nutrients'     },
+  { id:'stake',       cls:'tool-stake',      emoji:'🎋',  tip:'Support the stem'        },
+  { id:'tarp',        cls:'tool-tarp',       emoji:'🌂',  tip:'Shield from heavy rain'  },
+  { id:'shears',      cls:'tool-shears',     emoji:'✂️',  tip:'Prune dead growth'       },
 ];
 
 const SEASONS         = ['🌸 Spring','☀️ Summer','🍂 Autumn'];
@@ -961,9 +987,10 @@ function renderTools() {
   TOOLS.forEach(t => {
     const d = document.createElement('div');
     d.className = `tool-item ${t.cls}`;
-    d.dataset.id = t.id;
-    d.draggable  = true;
-    d.innerHTML  = `<span class="tool-emoji">${t.emoji}</span>`;
+    d.dataset.id  = t.id;
+    d.dataset.tip = t.tip;
+    d.draggable   = true;
+    d.innerHTML   = `<span class="tool-emoji">${t.emoji}</span>`;
     d.addEventListener('dragstart', e => onDragStart(e, t.id));
     d.addEventListener('dragend',   e => onDragEnd(e, t.id));
     d.addEventListener('touchstart', e => onToolTouchStart(e, t.id), { passive:false });
