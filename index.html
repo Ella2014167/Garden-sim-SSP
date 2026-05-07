@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🌱 Garden Sim</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: linear-gradient(to bottom, #1565a8 0%, #3a8ec8 30%, #7dc4e8 60%, #b0ddf5 100%);
+}
+
+/* ── Atmosphere (fixed, behind everything) ── */
+#sun {
+  position: fixed;
+  top: 68px; right: 28px;
+  font-size: 2.6rem;
+  pointer-events: none;
+  z-index: 1;
+  animation: sunPulse 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px rgba(255,220,0,.65));
+}
+@keyframes sunPulse {
+  0%,100% { filter: drop-shadow(0 0 12px rgba(255,220,0,.5)); }
+  50%      { filter: drop-shadow(0 0 30px rgba(255,220,0,.95)); }
+}
+.cloud {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1;
+  animation: cloudDrift linear infinite;
+  opacity: 0.75;
+}
+@keyframes cloudDrift {
+  from { transform: translateX(-140px); }
+  to   { transform: translateX(calc(100vw + 140px)); }
+}
+
+/* ── HUD ── */
+#hud {
+  flex-shrink: 0;
+  padding: 10px 20px 8px;
+  background: rgba(0,0,0,0.3);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  z-index: 30;
+}
+#meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  margin-bottom: 7px;
+}
+#progress-label {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.55);
+  font-weight: 400;
+}
+#health-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 4px;
+}
+#health-bar-bg {
+  height: 10px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+#health-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .7s ease, background .5s ease;
+  background: #4ade80;
+}
+
+/* ── Sky section ── */
+#sky-area {
+  flex: 1;
+  position: relative;
+  z-index: 2;           /* above ground-area (z-index:1) */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 0;
+  overflow: visible;    /* let plant-zone bleed into ground */
+}
+
+/* Wooden sign event card */
+#event-card {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(155deg, #f7e4a4 0%, #e9c96c 65%, #d2a840 100%);
+  border: 2px solid #9a7030;
+  border-radius: 7px;
+  padding: 11px 18px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #3a2208;
+  font-weight: 600;
+  line-height: 1.55;
+  box-shadow: 3px 5px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.4);
+  z-index: 5;
+  position: relative;
+  overflow: hidden;
+}
+#event-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg,
+    transparent, transparent 28px,
+    rgba(154,112,48,.07) 28px, rgba(154,112,48,.07) 29px);
+  pointer-events: none;
+}
+
+/* Feedback */
+#feedback {
+  width: 100%;
+  max-width: 420px;
+  min-height: 26px;
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  border-radius: 6px;
+  line-height: 1.4;
+  backdrop-filter: blur(6px);
+  transition: all 0.25s;
+  z-index: 5;
+  position: relative;
+}
+#feedback.good  { background:rgba(5,46,22,0.85);  color:#86efac; border-left:3px solid #4ade80; }
+#feedback.bad   { background:rgba(50,10,10,0.85);  color:#fca5a5; border-left:3px solid #f87171; }
+#feedback.empty { background: transparent; }
+
+/* ── Plant zone (bleeds down into grass) ── */
+#plant-zone {
+  position: relative;
+  z-index: 15;
+  margin-bottom: -58px;  /* overlaps into ground-area */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Transparent dashed drop circle */
+#plant-drop {
+  width: 154px;
+  height: 154px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,0.28);
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+  cursor: crosshair;
+  position: relative;
+  transition: border-color .25s, box-shadow .25s, transform .2s;
+}
+#plant-drop.drag-over {
+  border-color: rgba(74,222,128,.75);
+  box-shadow: 0 0 0 5px rgba(74,222,128,.15), 0 0 40px rgba(74,222,128,.25);
+  transform: scale(1.06);
+}
+#plant-drop.flash-good {
+  box-shadow: 0 0 0 8px rgba(74,222,128,.4), 0 0 65px rgba(74,222,128,.4);
+  border-color: #4ade80;
+}
+#plant-drop.flash-bad {
+  box-shadow: 0 0 0 8px rgba(248,113,113,.4), 0 0 55px rgba(248,113,113,.3);
+  border-color: #f87171;
+}
+
+#drop-hint {
+  position: absolute;
+  bottom: -20px;
+  font-size: 0.57rem;
+  color: rgba(255,255,255,0.38);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#plant-art {
+  font-size: 5.2rem;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.45));
+}
+#plant-art.bounce { animation: bouncePlant 0.55s ease forwards; }
+#plant-art.shake  { animation: shakePlant  0.45s ease forwards; }
+
+@keyframes bouncePlant {
+  0%   { transform: scale(1)    translateY(0); }
+  28%  { transform: scale(1.22) translateY(-16px); }
+  54%  { transform: scale(0.9)  translateY(3px); }
+  74%  { transform: scale(1.1)  translateY(-6px); }
+  100% { transform: scale(1)    translateY(0); }
+}
+@keyframes shakePlant {
+  0%,100% { transform: translateX(0)    rotate(0deg); }
+  18%     { transform: translateX(-10px) rotate(-5deg); }
+  38%     { transform: translateX( 10px) rotate( 5deg); }
+  58%     { transform: translateX(-7px)  rotate(-3deg); }
+  78%     { transform: translateX( 5px)  rotate( 2deg); }
+}
+
+/* Soil patch — sits at grass level, plant grows from it */
+#soil-patch {
+  width: 90px;
+  height: 26px;
+  background: radial-gradient(ellipse at 42% 38%, #9b6535 0%, #5a3018 48%, #2e1508 100%);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.55), inset 0 1px 3px rgba(255,200,100,.07);
+  position: relative;
+  z-index: 3;
+  margin-top: -4px;
+}
+
+/* ── Ground / Grass ── */
+#ground-area {
+  flex-shrink: 0;
+  background: linear-gradient(to bottom, #4a9e40 0%, #2c6620 100%);
+  position: relative;
+  z-index: 1;
+  padding: 0 16px 14px;
+  padding-top: 56px; /* space for plant overlap */
+}
+
+/* Curved grass top edge */
+#ground-area::before {
+  content: '';
+  position: absolute;
+  top: -24px; left: -4%;
+  width: 108%; height: 48px;
+  background: #4a9e40;
+  border-radius: 50% 50% 0 0;
+  z-index: 2;
+}
+
+/* ── Tool belt — emoji only, no text ── */
+#tool-belt {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  z-index: 3;
+  user-select: none;
+}
+
+.tool-item {
+  width: 62px;
+  height: 62px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  border: 1px solid rgba(0,0,0,0.1);
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s, opacity .2s;
+}
+
+/* Slight resting tilts — like real items sitting on grass */
+.tool-item:nth-child(1) { transform: rotate(-2.5deg); }
+.tool-item:nth-child(2) { transform: rotate( 1.5deg); }
+.tool-item:nth-child(3) { transform: rotate(-1.2deg); }
+.tool-item:nth-child(4) { transform: rotate( 2deg);   }
+.tool-item:nth-child(5) { transform: rotate(-1.8deg); }
+.tool-item:nth-child(6) { transform: rotate( 0.8deg); }
+.tool-item:nth-child(7) { transform: rotate(-2deg);   }
+.tool-item:nth-child(8) { transform: rotate( 1.2deg); }
+.tool-item:nth-child(9) { transform: rotate(-0.6deg); }
+
+.tool-item:hover  { transform: rotate(0deg) translateY(-10px) scale(1.18) !important; z-index: 5; }
+.tool-item:active { cursor: grabbing; }
+.tool-item.dragging {
+  opacity: 0.18;
+  transform: rotate(0deg) scale(0.85) !important;
+  pointer-events: none;
+}
+
+.tool-emoji { font-size: 2.5rem; pointer-events: none; line-height: 1; }
+
+/* Real-material colours per tool */
+.tool-water      { background:linear-gradient(145deg,#dbeafe,#bfdbfe); box-shadow:2px 5px 12px rgba(59,130,246,.3),  inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-pesticide  { background:linear-gradient(145deg,#dcfce7,#bbf7d0); box-shadow:2px 5px 12px rgba(34,197,94,.25),  inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-frost      { background:linear-gradient(145deg,#e0f2fe,#bae6fd); box-shadow:2px 5px 12px rgba(14,165,233,.25), inset 0 1px 0 rgba(255,255,255,.9); }
+.tool-dry        { background:linear-gradient(145deg,#fef9c3,#fef08a); box-shadow:2px 5px 12px rgba(234,179,8,.3),   inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-shade      { background:linear-gradient(145deg,#fce7f3,#fbcfe8); box-shadow:2px 5px 12px rgba(236,72,153,.25), inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-fertilizer { background:linear-gradient(145deg,#d1fae5,#a7f3d0); box-shadow:2px 5px 12px rgba(16,185,129,.25), inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-stake      { background:linear-gradient(145deg,#fef3c7,#fde68a); box-shadow:2px 5px 12px rgba(180,120,40,.3),  inset 0 1px 0 rgba(255,255,255,.7); }
+.tool-tarp       { background:linear-gradient(145deg,#ede9fe,#ddd6fe); box-shadow:2px 5px 12px rgba(139,92,246,.25), inset 0 1px 0 rgba(255,255,255,.8); }
+.tool-shears     { background:linear-gradient(145deg,#f3f4f6,#e5e7eb); box-shadow:2px 5px 12px rgba(100,100,100,.25),inset 0 1px 0 rgba(255,255,255,.95); }
+
+#tool-belt.disabled .tool-item {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.5);
+}
+
+/* ── End Game Overlay ── */
+#overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.82);
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+}
+#overlay.visible { display: flex; }
+
+#overlay-box {
+  background: linear-gradient(155deg, #fdf6e3 0%, #f5e0a0 55%, #e8c870 100%);
+  border: 3px solid #9a7030;
+  border-radius: 24px;
+  padding: 30px 28px 26px;
+  text-align: center;
+  max-width: 380px;
+  width: 92%;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.5);
+  position: relative;
+  overflow: hidden;
+}
+#overlay-box::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg,
+    transparent, transparent 30px, rgba(154,112,48,.07) 30px, rgba(154,112,48,.07) 31px);
+  pointer-events: none;
+}
+
+#overlay-icon   { font-size: 5rem; display: block; margin-bottom: 10px; }
+#overlay-title  { font-size: 1.7rem; color: #3a2208; font-weight: 800; margin-bottom: 8px; font-family: Georgia,serif; }
+#overlay-msg    { font-size: 0.88rem; color: #5a3d20; line-height: 1.65; margin-bottom: 12px; }
+#overlay-rating { font-size: 0.95rem; font-weight: 700; color: #3a2208; margin-bottom: 4px; }
+#overlay-stars  { font-size: 1.4rem; letter-spacing: 3px; margin-bottom: 10px; }
+#harvest-display {
+  display: flex; justify-content: center; gap: 4px; flex-wrap: wrap;
+  font-size: 2rem; min-height: 42px; align-items: center; margin-bottom: 12px;
+}
+#overlay-stats  { font-size: 0.74rem; color: #8b6340; line-height: 1.8; margin-bottom: 18px; }
+
+#restart-btn {
+  background: linear-gradient(145deg, #2d8a50, #226640);
+  border: 2px solid #1a4d30;
+  border-radius: 12px;
+  color: #d1fae5;
+  padding: 13px 34px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  transition: transform .12s, box-shadow .12s;
+}
+#restart-btn:hover  { transform: translateY(-2px); box-shadow: 0 7px 20px rgba(0,0,0,0.3); }
+#restart-btn:active { transform: translateY(1px); }
+
+/* ── Plant screen (pre-game planting) ── */
+#plant-screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 20px;
+  gap: 18px;
+}
+#plant-screen.visible { display: flex; }
+
+#ps-sign {
+  background: linear-gradient(155deg, #f7e4a4 0%, #e9c96c 60%, #d2a840 100%);
+  border: 2px solid #9a7030;
+  border-radius: 10px;
+  padding: 18px 26px 16px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 4px 6px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.45);
+  position: relative;
+  overflow: hidden;
+}
+#ps-sign::after {
+  content:'';
+  position:absolute; inset:0;
+  background: repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(154,112,48,.07) 28px, rgba(154,112,48,.07) 29px);
+  pointer-events:none;
+}
+#ps-badge {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #9a7030;
+  margin-bottom: 6px;
+}
+#ps-plant-name {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #3a2208;
+  font-family: Georgia, serif;
+  margin-bottom: 8px;
+}
+#ps-plant-desc {
+  font-size: 0.82rem;
+  color: #5a3d20;
+  line-height: 1.55;
+  font-style: italic;
+}
+
+#ps-soil-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  gap: 0;
+}
+#ps-soil-mound {
+  width: 160px;
+  height: 108px;
+  background: radial-gradient(ellipse 85% 70% at 50% 100%, #8b5a2b 0%, #5a3018 50%, #2e1508 100%);
+  border-radius: 50% 50% 38% 38% / 38% 38% 62% 62%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.5), inset 0 -6px 12px rgba(0,0,0,0.35);
+  border: 2px dashed rgba(255,255,255,0.2);
+  transition: transform .2s, box-shadow .2s;
+  position: relative;
+}
+#ps-soil-mound:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 5px rgba(74,222,128,0.25), 0 10px 28px rgba(0,0,0,0.5);
+  border-color: rgba(74,222,128,0.5);
+}
+#ps-seed {
+  font-size: 3rem;
+  margin-top: -32px;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+  position: relative;
+  z-index: 2;
+}
+#ps-seed.planting { animation: seedDropIn .8s ease-in forwards; }
+@keyframes seedDropIn {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  55%  { transform: translateY(22px) scale(0.6); opacity: 0.6; }
+  100% { transform: translateY(16px) scale(0); opacity: 0; }
+}
+#ps-sprout {
+  font-size: 3.8rem;
+  position: absolute;
+  top: -50px;
+  opacity: 0;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+}
+#ps-sprout.sprouting { animation: sproutUp .65s .85s cubic-bezier(.34,1.56,.64,1) forwards; }
+@keyframes sproutUp {
+  from { transform: translateY(20px) scale(0); opacity: 0; }
+  to   { transform: translateY(0)    scale(1); opacity: 1; }
+}
+#ps-tap-hint {
+  margin-top: 24px;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.5px;
+  animation: pulseHint 2s ease-in-out infinite;
+}
+@keyframes pulseHint { 0%,100%{opacity:.4} 50%{opacity:.9} }
+
+/* ── Win animals ── */
+#animal-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  min-height: 40px;
+  align-items: center;
+}
+.win-animal {
+  font-size: 1.75rem;
+  display: inline-block;
+  opacity: 0;
+  animation: animalArrive .5s cubic-bezier(.34,1.56,.64,1) forwards;
+  animation-delay: var(--d);
+}
+@keyframes animalArrive {
+  from { transform: scale(0) rotate(-30deg); opacity:0; }
+  to   { transform: scale(1) rotate(0deg);   opacity:1; }
+}
+
+/* Confetti */
+.confetti-piece {
+  position: fixed;
+  pointer-events: none;
+  z-index: 150;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+}
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- Atmosphere -->
+<div id="sun">☀️</div>
+<div class="cloud" style="top:12%;font-size:2rem; animation-duration:32s;animation-delay:-10s;">☁️</div>
+<div class="cloud" style="top:20%;font-size:1.4rem;animation-duration:48s;animation-delay:-26s;">☁️</div>
+<div class="cloud" style="top:8%; font-size:1.7rem;animation-duration:60s;animation-delay:-44s;opacity:.5;">☁️</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="meta">
+    <span id="season-day">🌸 Spring — Day 1</span>
+    <span>🌿 <span id="plant-name">Tomato</span> &nbsp;|&nbsp; 🔥 <span id="streak-num">0</span> &nbsp;|&nbsp; <span id="progress-label">Day 1 / 21</span></span>
+  </div>
+  <div id="health-row">
+    <span>🌿 Plant Health</span>
+    <span id="hp-text">100 / 100</span>
+  </div>
+  <div id="health-bar-bg"><div id="health-bar"></div></div>
+</div>
+
+<!-- Sky -->
+<div id="sky-area">
+  <div id="event-card">Loading your garden…</div>
+  <div id="feedback" class="empty"></div>
+
+  <div id="plant-zone">
+    <div id="plant-drop"
+         ondragover="onDragOver(event)"
+         ondragleave="onDragLeave()"
+         ondrop="onDrop(event)">
+      <div id="plant-art">🌱</div>
+      <span id="drop-hint">↓ drop tool here ↓</span>
+    </div>
+    <div id="soil-patch"></div>
+  </div>
+</div>
+
+<!-- Ground -->
+<div id="ground-area">
+  <div id="tool-belt"></div>
+</div>
+
+<!-- Planting screen (shown before each game) -->
+<div id="plant-screen">
+  <div id="ps-sign">
+    <div id="ps-badge">🌿 indigenous australian plant</div>
+    <div id="ps-plant-name">Gold Dusk Wattle</div>
+    <div id="ps-plant-desc"></div>
+  </div>
+  <div id="ps-soil-area" onclick="plantSeed()">
+    <div id="ps-soil-mound">
+      <div id="ps-seed">🌰</div>
+      <div id="ps-sprout">🌱</div>
+    </div>
+    <div id="ps-tap-hint">↓ tap the soil to plant ↓</div>
+  </div>
+</div>
+
+<!-- End overlay -->
+<div id="overlay">
+  <div id="overlay-box">
+    <span id="overlay-icon">🥀</span>
+    <div id="overlay-title"></div>
+    <div id="overlay-msg"></div>
+    <div id="overlay-rating"></div>
+    <div id="overlay-stars"></div>
+    <div id="harvest-display"></div>
+    <div id="animal-row"></div>
+    <div id="overlay-stats"></div>
+    <button id="restart-btn" onclick="startGame()">🌱 Plant Again</button>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const TOOLS = [
+  { id:'water',       cls:'tool-water',      emoji:'🪣'  },
+  { id:'pesticide',   cls:'tool-pesticide',  emoji:'🧴'  },
+  { id:'frost',       cls:'tool-frost',      emoji:'🧣'  },
+  { id:'dry',         cls:'tool-dry',        emoji:'☀️'  },
+  { id:'shade',       cls:'tool-shade',      emoji:'⛱️'  },
+  { id:'fertilizer',  cls:'tool-fertilizer', emoji:'🌿'  },
+  { id:'stake',       cls:'tool-stake',      emoji:'🎋'  },
+  { id:'tarp',        cls:'tool-tarp',       emoji:'🌂'  },
+  { id:'shears',      cls:'tool-shears',     emoji:'✂️'  },
+];
+
+const SEASONS         = ['🌸 Spring','☀️ Summer','🍂 Autumn'];
+const DAYS_PER_SEASON = 7;
+const WIN_DAY         = 21;
+
+const STAGE_DAYS = [1, 5, 9, 13, 17, 21];
+
+const PLANT_TYPES = [
+  { name:'Gold Dusk Wattle',
+    desc:'A small native wattle with golden pom-pom flowers, beloved by honeyeaters and native bees.',
+    winEmoji:'🌼', basketEmoji:'🌼🌼🌼',
+    animals:['🦜','🐝','🦋','🐦','🦎'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🪴', label:'Young shrub'   },
+      { emoji:'🌿', label:'Growing'       }, { emoji:'🌿', label:'Maturing'      },
+      { emoji:'🌼', label:'Budding'       }, { emoji:'🌼🌼🌼', label:'In full bloom!' },
+  ]},
+  { name:'Prickly Moses',
+    desc:'A spiky native shrub with creamy flowers — shelter for wrens, skinks and small beetles.',
+    winEmoji:'🌾', basketEmoji:'🌾🌾🌾',
+    animals:['🐦','🦎','🐝','🦋','🐦'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🌿', label:'Sprout'        },
+      { emoji:'🌿', label:'Prickly stems' }, { emoji:'🌾', label:'Maturing'      },
+      { emoji:'🌾', label:'Flowering'     }, { emoji:'🌾🌾🌾', label:'Thriving!'     },
+  ]},
+  { name:'Tall Sedge',
+    desc:'Tall grass-like tufts that line creek banks and shelter small creatures in their dense clumps.',
+    winEmoji:'🌾', basketEmoji:'🌾🌾🌾',
+    animals:['🐦','🦎','🐸','🦋','🐦'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🌿', label:'First shoots'  },
+      { emoji:'🌾', label:'Clumping'      }, { emoji:'🌾', label:'Tall & lush'   },
+      { emoji:'🌾', label:'Seeding'       }, { emoji:'🌾🌾🌾', label:'Thriving!'     },
+  ]},
+  { name:'Chocolate Lily',
+    desc:'Delicate star-shaped purple blooms with a warm chocolate scent — irresistible to butterflies.',
+    winEmoji:'🌸', basketEmoji:'🌸🌸🌸',
+    animals:['🦋','🐝','🦋','🐝','🦎'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🌿', label:'Narrow leaves' },
+      { emoji:'🌿', label:'Growing'       }, { emoji:'🌷', label:'Budding'       },
+      { emoji:'🌸', label:'In bloom'      }, { emoji:'🌸🌸🌸', label:'In full bloom!' },
+  ]},
+  { name:'Snowy Daisy-bush',
+    desc:'A hardy native shrub covered in white daisy flowers — a magnet for insects and small birds.',
+    winEmoji:'🌼', basketEmoji:'🌼🌼🌼',
+    animals:['🦋','🐝','🐦','🦋','🦎'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🪴', label:'Small shrub'   },
+      { emoji:'🌿', label:'Bushy'         }, { emoji:'🌿', label:'Maturing'      },
+      { emoji:'🌼', label:'First flowers' }, { emoji:'🌼🌼🌼', label:'In full bloom!' },
+  ]},
+  { name:'Wallaby Grass',
+    desc:'Soft fine-leaved grass that sways beautifully in the breeze, sheltering lizards and wrens.',
+    winEmoji:'🌿', basketEmoji:'🌿🌾🌿',
+    animals:['🦘','🦎','🐦','🦋','🐦'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🌿', label:'Fine shoots'   },
+      { emoji:'🌿', label:'Spreading'     }, { emoji:'🌾', label:'Tufting'       },
+      { emoji:'🌾', label:'Seeding'       }, { emoji:'🌿🌾🌿', label:'Thriving!'     },
+  ]},
+  { name:'Hop Goodenia',
+    desc:'A cheerful yellow-flowered sprawling native that butterflies and bees absolutely adore.',
+    winEmoji:'🌼', basketEmoji:'🌼🌼🌼',
+    animals:['🦋','🐝','🦋','🦜','🐦'],
+    stages:[
+      { emoji:'🌱', label:'Seedling'      }, { emoji:'🪴', label:'Sprout'        },
+      { emoji:'🌿', label:'Sprawling'     }, { emoji:'🌿', label:'Lush'          },
+      { emoji:'🌼', label:'Budding'       }, { emoji:'🌼🌼🌼', label:'In full bloom!' },
+  ]},
+];
+
+const EVENTS = [
+  { id:'drought',      text:"☀️ It hasn't rained in 4 days. The soil is bone dry and cracking at the edges.",             correct:'water',      correctMsg:'You watered deeply — the roots drink it up! (+5 hp)',         wrongMsg:'Without water the plant wilts badly. (-15 hp)',            damage:15, heal:5 },
+  { id:'aphids',       text:'🐛 Aphids! Tiny insects are clustered on the new leaves, sucking out the sap.',              correct:'pesticide',  correctMsg:'Bug spray wipes out the whole colony! (+5 hp)',             wrongMsg:'Aphids spread — leaves curl and yellow. (-15 hp)',          damage:15, heal:5 },
+  { id:'frost',        text:'❄️ Frost warning tonight. Temperatures will drop below freezing by midnight.',               correct:'frost',      correctMsg:'Frost cloth keeps the plant safe overnight! (+5 hp)',        wrongMsg:'Frost burns the leaves black. Severe shock. (-20 hp)',      damage:20, heal:5 },
+  { id:'overwater',    text:"💧 The soil is soggy and waterlogged. There's a faint mould smell — root rot risk!",         correct:'dry',        correctMsg:'You ease off and let it breathe. Roots recover! (+5 hp)',   wrongMsg:'More moisture worsens the rot badly. (-15 hp)',            damage:15, heal:5 },
+  { id:'heatwave',     text:'🌡️ Brutal heatwave — 38 °C in the sun. The plant is wilting fast.',                         correct:'shade',      correctMsg:'Shade cloth blocks the harsh rays. Relief! (+5 hp)',         wrongMsg:'Leaves scorch and curl without protection. (-15 hp)',       damage:15, heal:5 },
+  { id:'yellowing',    text:'💛 Lower leaves are turning yellow-green. Classic signs of a nutrient deficiency.',          correct:'fertilizer', correctMsg:'Balanced fertilizer restores the colour! (+5 hp)',           wrongMsg:'Without nutrients, more leaves drop. (-10 hp)',            damage:10, heal:5 },
+  { id:'windstorm',    text:'💨 Strong gusts all day — the main stem is bending dangerously close to snapping.',          correct:'stake',      correctMsg:'Bamboo stake secures the stem perfectly. (+5 hp)',           wrongMsg:'The stem cracks under the wind stress. (-15 hp)',          damage:15, heal:5 },
+  { id:'heavy_rain',   text:'🌧️ Heavy rain is forecast all week. The ground is already saturated.',                      correct:'tarp',       correctMsg:'The tarp keeps the roots from drowning. (+5 hp)',           wrongMsg:'Constant rain floods and suffocates the roots. (-15 hp)',  damage:15, heal:5 },
+  { id:'spider_mites', text:'🕷️ Spider mites — fine silvery webbing coats the undersides of the leaves.',               correct:'pesticide',  correctMsg:'Bug spray eliminates the mite colony! (+5 hp)',         wrongMsg:'Mites multiply — leaves speckle and pale. (-15 hp)',       damage:15, heal:5 },
+  { id:'prune',        text:"✂️ Dead and leggy branches are sapping the plant's energy. It's looking scraggly.",          correct:'shears',     correctMsg:'Clean pruning redirects energy to healthy growth! (+8 hp)', wrongMsg:'Dead wood keeps draining the plant. (-10 hp)',             damage:10, heal:8 },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let health, day, streak, bestStreak, currentEvent, gameActive, usedIds, earnedStageIdx, plantTypeIdx, currentPlantType;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+
+function getSeasonDay(d) {
+  const si = Math.min(Math.floor((d-1)/DAYS_PER_SEASON), SEASONS.length-1);
+  return `${SEASONS[si]} — Day ${d}`;
+}
+// Advance to the next growth stage only if health >= 80
+function tryUnlockStage() {
+  const nextIdx = earnedStageIdx + 1;
+  if (nextIdx < currentPlantType.stages.length &&
+      day >= STAGE_DAYS[nextIdx] &&
+      health >= 80) {
+    earnedStageIdx = nextIdx;
+  }
+}
+function hpColor(hp) {
+  if (hp > 60) return '#4ade80';
+  if (hp > 30) return '#facc15';
+  return '#f87171';
+}
+function pickEvent() {
+  let pool = EVENTS.filter(e => !usedIds.includes(e.id));
+  if (!pool.length) { usedIds = []; pool = EVENTS; }
+  const e = pool[Math.floor(Math.random() * pool.length)];
+  usedIds.push(e.id);
+  if (usedIds.length > 4) usedIds.shift();
+  return e;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('season-day').textContent  = getSeasonDay(day);
+  document.getElementById('streak-num').textContent  = streak;
+  document.getElementById('progress-label').textContent = `Day ${day} / ${WIN_DAY}`;
+  document.getElementById('hp-text').textContent     = `${health} / 100`;
+  const bar = document.getElementById('health-bar');
+  bar.style.width      = health + '%';
+  bar.style.background = hpColor(health);
+  bar.style.boxShadow  = `0 0 10px ${hpColor(health)}99`;
+  document.getElementById('plant-art').textContent = currentPlantType.stages[earnedStageIdx].emoji;
+}
+function showEvent(ev) {
+  document.getElementById('event-card').textContent = ev.text;
+  document.getElementById('feedback').className    = 'empty';
+  document.getElementById('feedback').textContent  = '';
+  document.getElementById('tool-belt').classList.remove('disabled');
+}
+function setFeedback(cls, msg) {
+  const el = document.getElementById('feedback');
+  el.className = cls; el.textContent = msg;
+}
+function animatePlant(type) {
+  const art = document.getElementById('plant-art');
+  art.classList.remove('bounce','shake');
+  void art.offsetWidth;
+  art.classList.add(type);
+  art.addEventListener('animationend', () => art.classList.remove(type), { once:true });
+}
+function flashZone(type) {
+  const z = document.getElementById('plant-drop');
+  z.classList.add(type);
+  setTimeout(() => z.classList.remove(type), 700);
+}
+
+// ── Apply tool ────────────────────────────────────────────────────────────────
+function applyTool(toolId) {
+  if (!gameActive || !currentEvent) return;
+  document.getElementById('tool-belt').classList.add('disabled');
+
+  const correct = toolId === currentEvent.correct;
+  if (correct) {
+    health = clamp(health + currentEvent.heal, 0, 100);
+    streak++;
+    bestStreak = Math.max(bestStreak, streak);
+    setFeedback('good', `✅ ${currentEvent.correctMsg}`);
+    animatePlant('bounce');
+    flashZone('flash-good');
+  } else {
+    health = clamp(health - currentEvent.damage, 0, 100);
+    streak = 0;
+    setFeedback('bad', `❌ ${currentEvent.wrongMsg}`);
+    animatePlant('shake');
+    flashZone('flash-bad');
+  }
+  render();
+
+  if (health <= 0)    { setTimeout(() => endGame(false), 950); return; }
+  if (day >= WIN_DAY) { setTimeout(() => endGame(true),  950); return; }
+
+  day++;
+  tryUnlockStage();
+  currentEvent = pickEvent();
+  setTimeout(() => { render(); showEvent(currentEvent); }, 1500);
+}
+
+// ── Mouse drag ────────────────────────────────────────────────────────────────
+let mouseDragId = null;
+
+function onDragStart(e, id) {
+  if (!gameActive) { e.preventDefault(); return; }
+  mouseDragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+  setTimeout(() => {
+    const el = document.querySelector(`.tool-item[data-id="${id}"]`);
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+function onDragEnd(e, id) {
+  const el = document.querySelector(`.tool-item[data-id="${id}"]`);
+  if (el) el.classList.remove('dragging');
+  mouseDragId = null;
+}
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.getElementById('plant-drop').classList.add('drag-over');
+}
+function onDragLeave() {
+  document.getElementById('plant-drop').classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('plant-drop').classList.remove('drag-over');
+  const id = e.dataTransfer.getData('text/plain') || mouseDragId;
+  if (id) applyTool(id);
+}
+
+// ── Touch drag ────────────────────────────────────────────────────────────────
+let touchId = null, touchClone = null, touchSrc = null;
+
+function onToolTouchStart(e, id) {
+  if (!gameActive) return;
+  e.preventDefault();
+  touchId = id; touchSrc = e.currentTarget;
+  const touch = e.touches[0];
+  const rect  = touchSrc.getBoundingClientRect();
+  touchClone  = touchSrc.cloneNode(true);
+  Object.assign(touchClone.style, {
+    position:'fixed', zIndex:'999', opacity:'.92', pointerEvents:'none',
+    width:rect.width+'px', height:rect.height+'px',
+    left:(touch.clientX-rect.width/2)+'px', top:(touch.clientY-rect.height/2)+'px',
+    transform:'scale(1.22) rotate(6deg)',
+    boxShadow:'0 16px 40px rgba(0,0,0,.5)',
+    transition:'none', borderRadius:'14px',
+  });
+  document.body.appendChild(touchClone);
+  touchSrc.classList.add('dragging');
+  document.addEventListener('touchmove', onTouchMove, { passive:false });
+  document.addEventListener('touchend',  onTouchEnd,  { once:true });
+}
+function onTouchMove(e) {
+  e.preventDefault();
+  if (!touchClone) return;
+  const t = e.touches[0];
+  touchClone.style.left = (t.clientX - touchClone.offsetWidth/2)+'px';
+  touchClone.style.top  = (t.clientY - touchClone.offsetHeight/2)+'px';
+  const r = document.getElementById('plant-drop').getBoundingClientRect();
+  document.getElementById('plant-drop').classList.toggle('drag-over',
+    t.clientX>=r.left && t.clientX<=r.right && t.clientY>=r.top && t.clientY<=r.bottom);
+}
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove);
+  const t = e.changedTouches[0];
+  const r = document.getElementById('plant-drop').getBoundingClientRect();
+  const over = t.clientX>=r.left && t.clientX<=r.right && t.clientY>=r.top && t.clientY<=r.bottom;
+  document.getElementById('plant-drop').classList.remove('drag-over');
+  if (touchSrc)   touchSrc.classList.remove('dragging');
+  if (touchClone) { document.body.removeChild(touchClone); touchClone=null; }
+  if (over && touchId) applyTool(touchId);
+  touchId=null; touchSrc=null;
+}
+
+// ── Build tools ───────────────────────────────────────────────────────────────
+function renderTools() {
+  const belt = document.getElementById('tool-belt');
+  belt.innerHTML = '';
+  TOOLS.forEach(t => {
+    const d = document.createElement('div');
+    d.className = `tool-item ${t.cls}`;
+    d.dataset.id = t.id;
+    d.draggable  = true;
+    d.innerHTML  = `<span class="tool-emoji">${t.emoji}</span>`;
+    d.addEventListener('dragstart', e => onDragStart(e, t.id));
+    d.addEventListener('dragend',   e => onDragEnd(e, t.id));
+    d.addEventListener('touchstart', e => onToolTouchStart(e, t.id), { passive:false });
+    belt.appendChild(d);
+  });
+}
+
+// ── Confetti ──────────────────────────────────────────────────────────────────
+function spawnConfetti() {
+  const colours = ['#f87171','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#86efac'];
+  for (let i = 0; i < 70; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const size = 6 + Math.random()*9;
+    Object.assign(el.style, {
+      left: Math.random()*100+'vw',
+      background: colours[Math.floor(Math.random()*colours.length)],
+      width: size+'px', height: size+'px',
+      animationDuration: (2+Math.random()*3)+'s',
+      animationDelay: (Math.random()*1.8)+'s',
+      borderRadius: Math.random()>.5 ? '50%' : '2px',
+    });
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+}
+
+// ── Endings ───────────────────────────────────────────────────────────────────
+function getRating(hp) {
+  if (hp >= 80) return { label:'Master Gardener',  stars:'⭐⭐⭐⭐⭐', tomatoes:5 };
+  if (hp >= 60) return { label:'Skilled Gardener', stars:'⭐⭐⭐⭐',   tomatoes:4 };
+  if (hp >= 40) return { label:'Green Thumbed',    stars:'⭐⭐⭐',     tomatoes:3 };
+  if (hp >= 20) return { label:'Still Learning',   stars:'⭐⭐',       tomatoes:2 };
+  return               { label:'Barely Made It',   stars:'⭐',         tomatoes:1 };
+}
+
+function endGame(won) {
+  gameActive = false;
+  document.getElementById('overlay').classList.add('visible');
+
+  if (won) {
+    spawnConfetti();
+    const r = getRating(health);
+    document.getElementById('overlay-icon').textContent    = currentPlantType.basketEmoji;
+    document.getElementById('overlay-title').textContent   = `${currentPlantType.name} Harvest!`;
+    document.getElementById('overlay-msg').textContent     =
+      health > 70
+        ? `A perfect season. Your ${currentPlantType.name.toLowerCase()} is the envy of the village!`
+        : health > 40
+        ? `Your ${currentPlantType.name.toLowerCase()} made it through all three seasons. A solid season's work.`
+        : `You barely scraped through — but that ${currentPlantType.name.toLowerCase()} is real, and it's yours!`;
+    document.getElementById('overlay-rating').textContent  = r.label;
+    document.getElementById('overlay-stars').textContent   = r.stars;
+    document.getElementById('harvest-display').textContent = currentPlantType.winEmoji.repeat(r.tomatoes);
+    // Animals gather around the plant
+    const animalRow = document.getElementById('animal-row');
+    animalRow.innerHTML = currentPlantType.animals
+      .map((a,i) => `<span class="win-animal" style="--d:${0.6+i*0.18}s">${a}</span>`)
+      .join('');
+    document.getElementById('overlay-stats').innerHTML     =
+      `Finished with <strong>${health} hp</strong> · Best streak: <strong>${bestStreak}</strong> correct in a row<br>Across 🌸 Spring · ☀️ Summer · 🍂 Autumn`;
+  } else {
+    document.getElementById('animal-row').innerHTML = '';
+    document.getElementById('overlay-icon').textContent    = '🥀';
+    document.getElementById('overlay-title').textContent   = 'The Plant Died';
+    document.getElementById('overlay-msg').textContent     =
+      `Day ${day} of ${WIN_DAY} — the plant\'s health hit zero. Every gardener loses one. The soil has lessons to teach. Try again?`;
+    document.getElementById('overlay-rating').textContent  = '';
+    document.getElementById('overlay-stars').textContent   = '';
+    document.getElementById('harvest-display').textContent = '💀';
+    document.getElementById('overlay-stats').innerHTML     =
+      `Made it to <strong>Day ${day}</strong> of ${WIN_DAY} · Best streak: <strong>${bestStreak}</strong>`;
+  }
+}
+
+// ── Plant screen ──────────────────────────────────────────────────────────────
+function showPlantScreen() {
+  const ps = document.getElementById('plant-screen');
+  document.getElementById('ps-plant-name').textContent = currentPlantType.name;
+  document.getElementById('ps-plant-desc').textContent = currentPlantType.desc;
+  // Reset seed + sprout
+  const seed   = document.getElementById('ps-seed');
+  const sprout = document.getElementById('ps-sprout');
+  seed.classList.remove('planting');
+  seed.style.opacity = '1';
+  seed.textContent   = '🌰';
+  sprout.classList.remove('sprouting');
+  sprout.style.opacity = '0';
+  sprout.textContent   = currentPlantType.stages[0].emoji;
+  ps.classList.add('visible');
+}
+
+function plantSeed() {
+  const seed   = document.getElementById('ps-seed');
+  const sprout = document.getElementById('ps-sprout');
+  if (seed.classList.contains('planting')) return;
+  seed.classList.add('planting');
+  setTimeout(() => sprout.classList.add('sprouting'), 820);
+  setTimeout(() => {
+    document.getElementById('plant-screen').classList.remove('visible');
+    renderTools();
+    render();
+    showEvent(currentEvent);
+  }, 1800);
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+function startGame() {
+  plantTypeIdx = (plantTypeIdx === undefined ? -1 : plantTypeIdx);
+  plantTypeIdx = (plantTypeIdx + 1) % PLANT_TYPES.length;
+  currentPlantType = PLANT_TYPES[plantTypeIdx];
+  health=100; day=1; streak=0; bestStreak=0; usedIds=[]; gameActive=true; earnedStageIdx=0;
+  document.getElementById('overlay').classList.remove('visible');
+  document.querySelectorAll('.confetti-piece').forEach(el=>el.remove());
+  document.getElementById('plant-name').textContent = currentPlantType.name;
+  currentEvent = pickEvent();
+  render();
+  showPlantScreen();
+}
+
+document.addEventListener('DOMContentLoaded', startGame);
+</script>
+</body>
+</html>
