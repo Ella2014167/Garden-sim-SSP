@@ -531,6 +531,13 @@ body {
   50%     { transform:translateY(-8px); }
 }
 
+/* fly back out (reverse of wsGather) */
+@keyframes wsLeave {
+  from { transform:translate(0,0) scale(1) rotate(0deg); opacity:1; }
+  30%  { opacity:1; }
+  to   { transform:translate(var(--sx),var(--sy)) scale(0.3) rotate(var(--rot,0deg)); opacity:0; }
+}
+
 #ws-msg {
   position: absolute;
   bottom: 14%;
@@ -1008,16 +1015,41 @@ function showWinnerScene() {
 
   const container = document.getElementById('ws-animals');
   container.innerHTML = '';
+
+  const GATHER_DUR_MS  = 1100;   // wsGather animation length
+  const LEAVE_DUR_MS   = 900;    // wsLeave animation length
+  const LEAVE_STAGGER  = 300;    // ms between each animal leaving
+  const HOLD_PAUSE_MS  = 700;    // wait after ALL arrive before departing
+
+  const animalEls = [];
+
   currentPlantType.animals.forEach((emoji, i) => {
     const s = ANIMAL_SLOTS[i];
     const el = document.createElement('div');
     el.className = 'ws-animal';
     el.textContent = emoji;
     el.style.cssText = `left:${s.l};top:${s.t};--sx:${s.sx};--sy:${s.sy};--rot:${s.rot};--d:${s.d}`;
-    // Add gentle float once gathered
-    const dur = 1100 + parseFloat(s.d)*1000;
-    setTimeout(() => el.classList.add('settled'), dur + 400);
+
+    const arrivalMs = parseFloat(s.d) * 1000 + GATHER_DUR_MS;
+    // Start gentle float once this animal has landed
+    setTimeout(() => el.classList.add('settled'), arrivalMs + 200);
+
     container.appendChild(el);
+    animalEls.push({ el, arrivalMs });
+  });
+
+  // Time when the very last animal has finished flying in
+  const allArrivedMs = Math.max(...animalEls.map(a => a.arrivalMs));
+
+  // Reverse departure: last animal leaves first
+  animalEls.forEach(({ el }, i) => {
+    const reverseIdx = (animalEls.length - 1) - i; // animal[4] → idx 0, animal[0] → idx 4
+    const leaveAt = allArrivedMs + HOLD_PAUSE_MS + reverseIdx * LEAVE_STAGGER;
+
+    setTimeout(() => {
+      el.classList.remove('settled');
+      el.style.animation = `wsLeave ${LEAVE_DUR_MS}ms ease-in forwards`;
+    }, leaveAt);
   });
 
   document.getElementById('winner-scene').classList.add('visible');
@@ -1047,7 +1079,7 @@ function endGame(won) {
   if (won) {
     spawnConfetti();
     showWinnerScene();
-    setTimeout(showWinStats, 4500);
+    setTimeout(showWinStats, 7000);
   } else {
     document.getElementById('animal-row').innerHTML = '';
     document.getElementById('overlay-icon').textContent    = '🥀';
