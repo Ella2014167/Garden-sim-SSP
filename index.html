@@ -277,30 +277,7 @@ body {
   position: relative;
 }
 
-/* Tooltip on hover */
-.tool-item::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15,15,15,0.9);
-  color: #fff;
-  font-size: 0.64rem;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 7px;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 50;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-  letter-spacing: 0.3px;
-}
-.tool-item:hover::after {
-  opacity: 1;
-}
+/* Tooltip — rendered as a fixed body element (see #tool-tip) */
 
 /* Slight resting tilts — like real items sitting on grass */
 .tool-item:nth-child(1) { transform: rotate(-2.5deg); }
@@ -586,6 +563,26 @@ body {
 
 .confetti-piece { z-index: 96; }
 
+/* ── Tool tooltip ── */
+#tool-tip {
+  position: fixed;
+  background: rgba(15,15,15,0.88);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(0);
+  transition: opacity 0.15s ease;
+  z-index: 9999;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+  letter-spacing: 0.3px;
+}
+#tool-tip.visible { opacity: 1; }
+
 /* ── Win animals (overlay row) ── */
 #animal-row {
   display: flex;
@@ -702,6 +699,8 @@ body {
     <button id="restart-btn" onclick="startGame()">🌱 Plant Again</button>
   </div>
 </div>
+
+<div id="tool-tip"></div>
 
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -994,6 +993,17 @@ function renderTools() {
     d.addEventListener('dragstart', e => onDragStart(e, t.id));
     d.addEventListener('dragend',   e => onDragEnd(e, t.id));
     d.addEventListener('touchstart', e => onToolTouchStart(e, t.id), { passive:false });
+    d.addEventListener('mouseenter', () => {
+      const tip  = document.getElementById('tool-tip');
+      const rect = d.getBoundingClientRect();
+      tip.textContent  = t.tip;
+      tip.style.left   = (rect.left + rect.width / 2) + 'px';
+      tip.style.top    = (rect.top - 38) + 'px';
+      tip.classList.add('visible');
+    });
+    d.addEventListener('mouseleave', () => {
+      document.getElementById('tool-tip').classList.remove('visible');
+    });
     belt.appendChild(d);
   });
 }
