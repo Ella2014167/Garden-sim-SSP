@@ -982,6 +982,56 @@ function onTouchEnd(e) {
   touchId=null; touchSrc=null;
 }
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx = null;
+
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+
+function playChirp(volume = 0.2, delayS = 0) {
+  const ctx = getAudio();
+  if (!ctx) return;
+  const now = ctx.currentTime + delayS;
+  // Two quick ascending tones = bird chirp
+  const notes = [
+    [1800 + Math.random()*400, 3200 + Math.random()*600, 0.07],
+    [2200 + Math.random()*400, 3800 + Math.random()*600, 0.07],
+  ];
+  notes.forEach(([f1, f2, dur], i) => {
+    const t   = now + i * 0.13;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f1, t);
+    osc.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(volume, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t);
+    osc.stop(t + dur + 0.1);
+  });
+}
+
+function scheduleAmbientChirps() {
+  if (!gameActive) return;
+  const wait = 3500 + Math.random() * 5500;
+  setTimeout(() => {
+    if (!gameActive) return;
+    playChirp(0.15);
+    // Occasionally add a second chirp shortly after
+    if (Math.random() > 0.5) {
+      setTimeout(() => gameActive && playChirp(0.12), 600 + Math.random()*400);
+    }
+    scheduleAmbientChirps();
+  }, wait);
+}
+
 // ── Build tools ───────────────────────────────────────────────────────────────
 function renderTools() {
   const belt = document.getElementById('tool-belt');
@@ -1073,8 +1123,11 @@ function showWinnerScene() {
     el.style.cssText = `left:${s.l};top:${s.t};--sx:${s.sx};--sy:${s.sy};--rot:${s.rot};--d:${s.d}`;
 
     const arrivalMs = parseFloat(s.d) * 1000 + GATHER_DUR_MS;
-    // Start gentle float once this animal has landed
-    setTimeout(() => el.classList.add('settled'), arrivalMs + 200);
+    // Chirp + gentle float once this animal has landed
+    setTimeout(() => {
+      el.classList.add('settled');
+      playChirp(0.18);
+    }, arrivalMs + 200);
 
     container.appendChild(el);
     animalEls.push({ el, arrivalMs });
@@ -1165,6 +1218,7 @@ function plantSeed() {
   if (seed.classList.contains('planting')) return;
   seed.classList.add('planting');
   setTimeout(() => sprout.classList.add('sprouting'), 820);
+  getAudio(); // unlock AudioContext on user gesture
   setTimeout(() => {
     document.getElementById('plant-screen').classList.remove('visible');
     // Fade the drop zone in now that the seed has been planted
@@ -1175,6 +1229,7 @@ function plantSeed() {
     renderTools();
     render();
     showEvent(currentEvent);
+    scheduleAmbientChirps();
   }, 1800);
 }
 
