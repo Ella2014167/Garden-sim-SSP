@@ -992,41 +992,78 @@ function getAudio() {
   return audioCtx;
 }
 
-function playChirp(volume = 0.2, delayS = 0) {
+// One bird note: sine + harmonic + optional vibrato
+function birdTone(ctx, f1, f2, t, dur, vol, vibHz = 0, vibAmt = 0) {
+  const master = ctx.createGain();
+  master.connect(ctx.destination);
+  master.gain.setValueAtTime(0, t);
+  master.gain.linearRampToValueAtTime(vol, t + 0.008);
+  master.gain.setValueAtTime(vol, t + dur - 0.018);
+  master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+  [1, 2].forEach((h, hi) => {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    g.gain.value = hi === 0 ? 1 : 0.3;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f1 * h, t);
+    osc.frequency.exponentialRampToValueAtTime(f2 * h, t + dur);
+    if (vibHz > 0) {
+      const lfo  = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = vibHz;
+      lfoG.gain.value = vibAmt;
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+      lfo.start(t);
+      lfo.stop(t + dur + 0.05);
+    }
+    osc.connect(g);
+    g.connect(master);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  });
+}
+
+function playBirdCall(vol = 0.18, delayS = 0) {
   const ctx = getAudio();
   if (!ctx) return;
-  const now = ctx.currentTime + delayS;
-  // Two quick ascending tones = bird chirp
-  const notes = [
-    [1800 + Math.random()*400, 3200 + Math.random()*600, 0.07],
-    [2200 + Math.random()*400, 3800 + Math.random()*600, 0.07],
-  ];
-  notes.forEach(([f1, f2, dur], i) => {
-    const t   = now + i * 0.13;
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(f1, t);
-    osc.frequency.exponentialRampToValueAtTime(f2, t + dur);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(volume, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.start(t);
-    osc.stop(t + dur + 0.1);
-  });
+  const t    = ctx.currentTime + delayS;
+  const base = 1700 + Math.random() * 1100;
+  const type = Math.floor(Math.random() * 4);
+
+  if (type === 0) {
+    // Warbler — 3 quick rising chips
+    birdTone(ctx, base,       base*1.55, t,       0.07, vol,     13, 32);
+    birdTone(ctx, base*1.05,  base*1.60, t+0.09,  0.07, vol*.9,  13, 32);
+    birdTone(ctx, base*1.10,  base*1.65, t+0.18,  0.07, vol*.8,  13, 32);
+  } else if (type === 1) {
+    // Robin — long descending whistle
+    birdTone(ctx, base*1.9,   base*1.0,  t,       0.20, vol,      7, 26);
+    birdTone(ctx, base*1.65,  base*0.88, t+0.24,  0.15, vol*.85,  7, 22);
+  } else if (type === 2) {
+    // Wren — rapid rattling trill
+    for (let i = 0; i < 7; i++) {
+      const f = base + Math.random() * 900;
+      birdTone(ctx, f, f*(0.88+Math.random()*.28), t+i*0.048, 0.038, vol*(1-i*.03), 20, 55);
+    }
+  } else {
+    // Honeyeater — up-dip-up flourish
+    birdTone(ctx, base,      base*1.75, t,       0.09, vol,     10, 42);
+    birdTone(ctx, base*1.75, base*1.1,  t+0.11,  0.07, vol*.9,  10, 38);
+    birdTone(ctx, base*1.15, base*1.85, t+0.20,  0.09, vol*.85, 12, 42);
+  }
 }
 
 function scheduleAmbientChirps() {
   if (!gameActive) return;
-  const wait = 3500 + Math.random() * 5500;
+  const wait = 3000 + Math.random() * 5000;
   setTimeout(() => {
     if (!gameActive) return;
-    playChirp(0.15);
-    // Occasionally add a second chirp shortly after
-    if (Math.random() > 0.5) {
-      setTimeout(() => gameActive && playChirp(0.12), 600 + Math.random()*400);
+    playBirdCall(0.15);
+    // Sometimes a second bird responds
+    if (Math.random() > 0.45) {
+      setTimeout(() => gameActive && playBirdCall(0.12), 700 + Math.random()*600);
     }
     scheduleAmbientChirps();
   }, wait);
@@ -1126,7 +1163,7 @@ function showWinnerScene() {
     // Chirp + gentle float once this animal has landed
     setTimeout(() => {
       el.classList.add('settled');
-      playChirp(0.18);
+      playBirdCall(0.18);
     }, arrivalMs + 200);
 
     container.appendChild(el);
