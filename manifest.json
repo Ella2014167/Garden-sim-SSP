@@ -1,0 +1,12 @@
+{
+  "name": "Garden Sim SSP",
+  "short_name": "Garden Sim",
+  "description": "Grow indigenous Australian plants through the seasons!",
+  "start_url": "/Garden-sim-SSP/",
+  "display": "standalone",
+  "background_color": "#1565a8",
+  "theme_color": "#2c6620",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

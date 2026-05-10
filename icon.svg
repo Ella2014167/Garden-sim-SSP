@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="r"><rect width="512" height="512" rx="110" ry="110"/></clipPath>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1565a8"/>
+      <stop offset="60%"  stop-color="#3a8ec8"/>
+      <stop offset="100%" stop-color="#7dc4e8"/>
+    </linearGradient>
+    <linearGradient id="gnd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#4a9e40"/>
+      <stop offset="100%" stop-color="#2c6620"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="50%">
+      <stop offset="0%"   stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </radialGradient>
+    <radialGradient id="soil" cx="42%" cy="38%">
+      <stop offset="0%"   stop-color="#9b6535"/>
+      <stop offset="55%"  stop-color="#5a3018"/>
+      <stop offset="100%" stop-color="#2e1508"/>
+    </radialGradient>
+  </defs>
+
+  <g clip-path="url(#r)">
+    <!-- Sky -->
+    <rect width="512" height="512" fill="url(#sky)"/>
+
+    <!-- Sun -->
+    <circle cx="410" cy="95" r="52" fill="url(#sun)" opacity=".95"/>
+
+    <!-- Ground -->
+    <rect y="348" width="512" height="164" fill="url(#gnd)"/>
+    <ellipse cx="256" cy="348" rx="290" ry="38" fill="#4a9e40"/>
+
+    <!-- Soil mound -->
+    <ellipse cx="256" cy="368" rx="95" ry="30" fill="url(#soil)"/>
+
+    <!-- Stem -->
+    <rect x="244" y="228" width="22" height="145" rx="11" fill="#2e7d28"/>
+
+    <!-- Back leaves -->
+    <ellipse cx="200" cy="300" rx="62" ry="24" fill="#4a9e40"
+             transform="rotate(-38 200 300)"/>
+    <ellipse cx="312" cy="300" rx="62" ry="24" fill="#4a9e40"
+             transform="rotate(38 312 300)"/>
+
+    <!-- Front leaves -->
+    <ellipse cx="214" cy="272" rx="66" ry="26" fill="#66bb44"
+             transform="rotate(-30 214 272)"/>
+    <ellipse cx="298" cy="272" rx="66" ry="26" fill="#66bb44"
+             transform="rotate(30 298 272)"/>
+
+    <!-- Top leaf cluster -->
+    <ellipse cx="256" cy="222" rx="40" ry="62" fill="#78cc50"/>
+    <ellipse cx="226" cy="240" rx="34" ry="52" fill="#66bb44"
+             transform="rotate(-18 226 240)"/>
+    <ellipse cx="286" cy="240" rx="34" ry="52" fill="#66bb44"
+             transform="rotate(18 286 240)"/>
+
+    <!-- Leaf highlights -->
+    <ellipse cx="256" cy="210" rx="16" ry="28" fill="#96dd6a" opacity=".6"/>
+  </g>
+</svg>
