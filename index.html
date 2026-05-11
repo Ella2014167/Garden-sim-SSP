@@ -996,7 +996,7 @@ function getAudio() {
   return audioCtx;
 }
 
-// One bird note: sine + harmonic + optional vibrato
+// Single pitched note with optional vibrato + one harmonic
 function birdTone(ctx, f1, f2, t, dur, vol, vibHz = 0, vibAmt = 0) {
   const master = ctx.createGain();
   master.connect(ctx.destination);
@@ -1004,28 +1004,83 @@ function birdTone(ctx, f1, f2, t, dur, vol, vibHz = 0, vibAmt = 0) {
   master.gain.linearRampToValueAtTime(vol, t + 0.008);
   master.gain.setValueAtTime(vol, t + dur - 0.018);
   master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-
   [1, 2].forEach((h, hi) => {
     const osc = ctx.createOscillator();
     const g   = ctx.createGain();
-    g.gain.value = hi === 0 ? 1 : 0.3;
+    g.gain.value = hi === 0 ? 1 : 0.28;
     osc.type = 'sine';
     osc.frequency.setValueAtTime(f1 * h, t);
     osc.frequency.exponentialRampToValueAtTime(f2 * h, t + dur);
-    if (vibHz > 0) {
-      const lfo  = ctx.createOscillator();
-      const lfoG = ctx.createGain();
-      lfo.frequency.value = vibHz;
-      lfoG.gain.value = vibAmt;
-      lfo.connect(lfoG);
-      lfoG.connect(osc.frequency);
-      lfo.start(t);
-      lfo.stop(t + dur + 0.05);
+    if (vibHz > 0 && hi === 0) {
+      const lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+      lfo.frequency.value = vibHz; lfoG.gain.value = vibAmt;
+      lfo.connect(lfoG); lfoG.connect(osc.frequency);
+      lfo.start(t); lfo.stop(t + dur + 0.05);
     }
-    osc.connect(g);
-    g.connect(master);
-    osc.start(t);
-    osc.stop(t + dur + 0.05);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  });
+}
+
+// Kookaburra — iconic ascending laugh, then trailing off
+function kookaburra(ctx, t, vol) {
+  // Intro chuckles
+  [[440,530,0,0.09],[475,590,0.12,0.08],[510,650,0.22,0.08]].forEach(
+    ([f1,f2,s,d]) => birdTone(ctx,f1,f2,t+s,d,vol*0.65)
+  );
+  // Main laugh: rapid alternating up-down
+  for (let i = 0; i < 9; i++) {
+    const up = i % 2 === 0;
+    birdTone(ctx, up?630:880, up?920:590, t+0.32+i*0.062, 0.052, vol*(0.8+i*0.015));
+  }
+  // Trail off
+  birdTone(ctx, 720, 530, t+0.32+9*0.062,       0.12, vol*0.7);
+  birdTone(ctx, 530, 400, t+0.32+9*0.062+0.15,  0.16, vol*0.45);
+}
+
+// Honeyeater — melodic up-dip-up whistle phrases
+function honeyeater(ctx, t, vol) {
+  const b = 2100 + Math.random() * 700;
+  birdTone(ctx, b,      b*1.7,  t,      0.10, vol,      10, 40);
+  birdTone(ctx, b*1.7,  b*1.1,  t+0.13, 0.08, vol*0.9,  10, 38);
+  birdTone(ctx, b*1.15, b*1.85, t+0.23, 0.10, vol*0.85, 12, 42);
+  birdTone(ctx, b*1.1,  b*1.6,  t+0.44, 0.08, vol*0.75, 10, 35);
+  birdTone(ctx, b*1.6,  b*1.0,  t+0.54, 0.12, vol*0.65,  8, 30);
+}
+
+// Tawny Frogmouth — deep repetitive oom-oom-oom boom
+function tawnyFrogmouth(ctx, t, vol) {
+  for (let i = 0; i < 5; i++) {
+    const ct = t + i * 0.44;
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0, ct);
+    gain.gain.linearRampToValueAtTime(vol * 0.95, ct + 0.04);
+    gain.gain.setValueAtTime(vol * 0.95, ct + 0.24);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ct + 0.38);
+    // Fundamental + sub-harmonic for deep boom
+    [[130, 100, 1], [65, 50, 0.45]].forEach(([fStart, fEnd, gv]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; g.gain.value = gv;
+      o.frequency.setValueAtTime(fStart, ct);
+      o.frequency.exponentialRampToValueAtTime(fEnd, ct + 0.34);
+      o.connect(g); g.connect(gain);
+      o.start(ct); o.stop(ct + 0.42);
+    });
+  }
+}
+
+// Rainbow Lorikeet — rapid screechy chattering
+function rainbowLorikeet(ctx, t, vol) {
+  const calls = [
+    [2400,3800,0.050],[3600,2200,0.040],[2700,4100,0.052],
+    [3900,2500,0.040],[2900,4300,0.052],[4100,2700,0.042],
+    [3100,4600,0.055],[4300,2900,0.048],[3300,4800,0.050],
+  ];
+  let off = 0;
+  calls.forEach(([f1,f2,dur]) => {
+    birdTone(ctx, f1, f2, t+off, dur, vol*0.8, 24, 68);
+    off += dur + 0.015;
   });
 }
 
@@ -1033,30 +1088,11 @@ function playBirdCall(vol = 0.18, delayS = 0) {
   const ctx = getAudio();
   if (!ctx) return;
   const t    = ctx.currentTime + delayS;
-  const base = 1700 + Math.random() * 1100;
   const type = Math.floor(Math.random() * 4);
-
-  if (type === 0) {
-    // Warbler — 3 quick rising chips
-    birdTone(ctx, base,       base*1.55, t,       0.07, vol,     13, 32);
-    birdTone(ctx, base*1.05,  base*1.60, t+0.09,  0.07, vol*.9,  13, 32);
-    birdTone(ctx, base*1.10,  base*1.65, t+0.18,  0.07, vol*.8,  13, 32);
-  } else if (type === 1) {
-    // Robin — long descending whistle
-    birdTone(ctx, base*1.9,   base*1.0,  t,       0.20, vol,      7, 26);
-    birdTone(ctx, base*1.65,  base*0.88, t+0.24,  0.15, vol*.85,  7, 22);
-  } else if (type === 2) {
-    // Wren — rapid rattling trill
-    for (let i = 0; i < 7; i++) {
-      const f = base + Math.random() * 900;
-      birdTone(ctx, f, f*(0.88+Math.random()*.28), t+i*0.048, 0.038, vol*(1-i*.03), 20, 55);
-    }
-  } else {
-    // Honeyeater — up-dip-up flourish
-    birdTone(ctx, base,      base*1.75, t,       0.09, vol,     10, 42);
-    birdTone(ctx, base*1.75, base*1.1,  t+0.11,  0.07, vol*.9,  10, 38);
-    birdTone(ctx, base*1.15, base*1.85, t+0.20,  0.09, vol*.85, 12, 42);
-  }
+  if      (type === 0) kookaburra(ctx, t, vol);
+  else if (type === 1) honeyeater(ctx, t, vol);
+  else if (type === 2) tawnyFrogmouth(ctx, t, vol);
+  else                 rainbowLorikeet(ctx, t, vol);
 }
 
 function scheduleAmbientChirps() {
@@ -1065,9 +1101,8 @@ function scheduleAmbientChirps() {
   setTimeout(() => {
     if (!gameActive) return;
     playBirdCall(0.15);
-    // Sometimes a second bird responds
     if (Math.random() > 0.45) {
-      setTimeout(() => gameActive && playBirdCall(0.12), 700 + Math.random()*600);
+      setTimeout(() => gameActive && playBirdCall(0.12), 800 + Math.random()*700);
     }
     scheduleAmbientChirps();
   }, wait);
